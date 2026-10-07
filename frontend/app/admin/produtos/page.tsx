@@ -71,6 +71,46 @@ export default function AdminProductsPage() {
         loadProducts();
     }, []);
 
+    async function handleDelete(product: Product) {
+        const confirmed = window.confirm(
+            `Tem certeza que deseja excluir o produto "${product.name}"?`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setError("");
+
+            const response = await fetch(
+                `${API_URL}/api/admin/products/${product.id}`,
+                {
+                    method: "DELETE",
+                    credentials: "include",
+                }
+            );
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(
+                    data?.message ||
+                    data?.error ||
+                    "Não foi possível excluir o produto."
+                );
+            }
+
+            await loadProducts();
+        } catch (err) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Erro ao excluir produto."
+            );
+        }
+    }
+
     return (
         <main className="min-h-screen bg-neutral-100">
             <header className="border-b border-neutral-200 bg-white">
@@ -238,12 +278,22 @@ export default function AdminProductsPage() {
                                                 </td>
 
                                                 <td className="px-6 py-5 text-right">
-                                                    <Link
-                                                        href={`/admin/produtos/${product.id}`}
-                                                        className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                                                    >
-                                                        Editar
-                                                    </Link>
+                                                    <div className="flex justify-end gap-2">
+                                                        <Link
+                                                            href={`/admin/produtos/${product.id}`}
+                                                            className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                                                        >
+                                                            Editar
+                                                        </Link>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(product)}
+                                                            className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                                        >
+                                                            Excluir
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );

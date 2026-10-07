@@ -100,6 +100,7 @@ export default function NewProductPage() {
                 headers: {
                     "Content-Type": "application/json",
                 },
+                credentials: "include",
                 body: JSON.stringify({
                     name: name.trim(),
                     sku: sku.trim(),

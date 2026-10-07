@@ -1,0 +1,15 @@
+﻿{
+    "stock":  10,
+    "priceCents":  14990,
+    "sku":  "VEST-MIDI-ZOD-001",
+    "name":  "Vestido Midi Elegance Zod",
+    "categoryId":  "cmuw2doo10000y4rmcdax83np",
+    "description":  "Vestido midi feminino para teste da validação Zod.",
+    "images":  [
+                   {
+                       "url":  "https://example.com/vestido-teste.jpg",
+                       "alt":  "Vestido Midi Elegance Zod"
+                   }
+               ],
+    "active":  true
+}

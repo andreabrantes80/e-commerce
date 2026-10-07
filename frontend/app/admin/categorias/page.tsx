@@ -95,6 +95,7 @@ export default function CategoriasPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
@@ -137,9 +138,10 @@ export default function CategoriasPage() {
       setError("");
 
       const response = await fetch(
-        `${API_URL}/api/admin/categories/${category.id} `,
+        `${API_URL}/api/admin/categories/${category.id}`,
         {
           method: "DELETE",
+          credentials: "include",
         }
       );
 

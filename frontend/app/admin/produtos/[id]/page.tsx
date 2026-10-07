@@ -58,7 +58,9 @@ export default function EditarProdutoPage() {
         async function loadData() {
             try {
                 const [productResponse, categoriesResponse] = await Promise.all([
-                    fetch(`${API_URL}/api/admin/products/${id}`),
+                    fetch(`${API_URL}/api/admin/products/${id}`, {
+                        credentials: "include",
+                    }),
                     fetch(`${API_URL}/api/categories`),
                 ]);
 
@@ -146,6 +148,7 @@ export default function EditarProdutoPage() {
                     headers: {
                         "Content-Type": "application/json",
                     },
+                    credentials: "include",
                     body: JSON.stringify({
                         name: name.trim(),
                         sku: sku.trim(),

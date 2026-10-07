@@ -1,19 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { prisma } from "../lib/prisma.js";
-
-type ProductBody = {
-  name: string;
-  sku: string;
-  description?: string | null;
-  priceCents: number;
-  stock: number;
-  categoryId?: string | null;
-  active?: boolean;
-  images?: {
-    url: string;
-    alt?: string | null;
-  }[];
-};
+import { requireAdmin } from "../hooks/require-admin.js";
+import {
+  createProductSchema,
+  updateProductSchema,
+} from "../schemas/products.js";
 
 function createSlug(value: string) {
   return value
@@ -46,7 +37,10 @@ async function uniqueSlug(name: string, currentId?: string) {
 }
 
 export async function productRoutes(app: FastifyInstance) {
-  // LISTAR PRODUTOS
+  // =========================================================
+  // LISTAR PRODUTOS - LOJA
+  // =========================================================
+
   app.get("/api/products", async () => {
     return prisma.product.findMany({
       where: { active: true },
@@ -62,9 +56,15 @@ export async function productRoutes(app: FastifyInstance) {
     });
   });
 
+  // =========================================================
   // BUSCAR PRODUTO POR ID - ADMIN
+  // =========================================================
+
   app.get<{ Params: { id: string } }>(
     "/api/admin/products/:id",
+    {
+      preHandler: requireAdmin,
+    },
     async (request, reply) => {
       const product = await prisma.product.findUnique({
         where: {
@@ -90,7 +90,10 @@ export async function productRoutes(app: FastifyInstance) {
     },
   );
 
+  // =========================================================
   // BUSCAR PRODUTO POR SLUG - LOJA
+  // =========================================================
+
   app.get<{ Params: { slug: string } }>(
     "/api/products/:slug",
     async (request, reply) => {
@@ -118,10 +121,25 @@ export async function productRoutes(app: FastifyInstance) {
     },
   );
 
-  // CRIAR PRODUTO
-  app.post<{ Body: ProductBody }>(
+  // =========================================================
+  // CRIAR PRODUTO - ADMIN
+  // =========================================================
+
+  app.post(
     "/api/admin/products",
+    {
+      preHandler: requireAdmin,
+    },
     async (request, reply) => {
+      const result = createProductSchema.safeParse(request.body);
+
+      if (!result.success) {
+        return reply.code(400).send({
+          message: "Dados inválidos",
+          errors: result.error.flatten().fieldErrors,
+        });
+      }
+
       const {
         name,
         sku,
@@ -131,35 +149,12 @@ export async function productRoutes(app: FastifyInstance) {
         categoryId,
         active = true,
         images = [],
-      } = request.body;
+      } = result.data;
 
-      if (!name?.trim()) {
-        return reply.code(400).send({
-          message: "Nome do produto é obrigatório",
-        });
-      }
-
-      if (!sku?.trim()) {
-        return reply.code(400).send({
-          message: "SKU é obrigatório",
-        });
-      }
-
-      if (!Number.isInteger(priceCents) || priceCents < 0) {
-        return reply.code(400).send({
-          message: "Preço inválido",
-        });
-      }
-
-      if (!Number.isInteger(stock) || stock < 0) {
-        return reply.code(400).send({
-          message: "Estoque inválido",
-        });
-      }
-
+      // Verificar SKU duplicado
       const existingSku = await prisma.product.findUnique({
         where: {
-          sku: sku.trim(),
+          sku,
         },
       });
 
@@ -169,9 +164,12 @@ export async function productRoutes(app: FastifyInstance) {
         });
       }
 
+      // Verificar categoria
       if (categoryId) {
         const category = await prisma.category.findUnique({
-          where: { id: categoryId },
+          where: {
+            id: categoryId,
+          },
         });
 
         if (!category) {
@@ -181,14 +179,16 @@ export async function productRoutes(app: FastifyInstance) {
         }
       }
 
+      // Gerar slug único
       const slug = await uniqueSlug(name);
 
+      // Criar produto
       const product = await prisma.product.create({
         data: {
-          name: name.trim(),
+          name,
           slug,
-          sku: sku.trim(),
-          description: description?.trim() || null,
+          sku,
+          description: description || null,
           priceCents,
           stock,
           categoryId: categoryId || null,
@@ -196,8 +196,8 @@ export async function productRoutes(app: FastifyInstance) {
           images: {
             create: images.map((image, index) => ({
               url: image.url,
-              alt: image.alt || name.trim(),
-              position: index,
+              alt: image.alt || name,
+              position: image.position ?? index,
             })),
           },
         },
@@ -215,133 +215,24 @@ export async function productRoutes(app: FastifyInstance) {
     },
   );
 
-  // EDITAR PRODUTO
+  // =========================================================
+  // EDITAR PRODUTO - ADMIN
+  // =========================================================
+
   app.patch<{
     Params: { id: string };
-    Body: ProductBody;
-  }>("/api/admin/products/:id", async (request, reply) => {
-    const { id } = request.params;
-
-    const existing = await prisma.product.findUnique({
-      where: { id },
-    });
-
-    if (!existing) {
-      return reply.code(404).send({
-        message: "Produto não encontrado",
-      });
-    }
-
-    const {
-      name,
-      sku,
-      description,
-      priceCents,
-      stock,
-      categoryId,
-      active = true,
-      images = [],
-    } = request.body;
-
-    if (!name?.trim()) {
-      return reply.code(400).send({
-        message: "Nome do produto é obrigatório",
-      });
-    }
-
-    if (!sku?.trim()) {
-      return reply.code(400).send({
-        message: "SKU é obrigatório",
-      });
-    }
-
-    if (!Number.isInteger(priceCents) || priceCents < 0) {
-      return reply.code(400).send({
-        message: "Preço inválido",
-      });
-    }
-
-    if (!Number.isInteger(stock) || stock < 0) {
-      return reply.code(400).send({
-        message: "Estoque inválido",
-      });
-    }
-
-    const skuProduct = await prisma.product.findUnique({
-      where: {
-        sku: sku.trim(),
-      },
-    });
-
-    if (skuProduct && skuProduct.id !== id) {
-      return reply.code(409).send({
-        message: "Já existe outro produto com este SKU",
-      });
-    }
-
-    if (categoryId) {
-      const category = await prisma.category.findUnique({
-        where: { id: categoryId },
-      });
-
-      if (!category) {
-        return reply.code(400).send({
-          message: "Categoria não encontrada",
-        });
-      }
-    }
-
-    const slug = await uniqueSlug(name, id);
-
-    const product = await prisma.$transaction(async (tx) => {
-      await tx.productImage.deleteMany({
-        where: {
-          productId: id,
-        },
-      });
-
-      return tx.product.update({
-        where: {
-          id,
-        },
-        data: {
-          name: name.trim(),
-          slug,
-          sku: sku.trim(),
-          description: description?.trim() || null,
-          priceCents,
-          stock,
-          categoryId: categoryId || null,
-          active,
-          images: {
-            create: images.map((image, index) => ({
-              url: image.url,
-              alt: image.alt || name.trim(),
-              position: index,
-            })),
-          },
-        },
-        include: {
-          category: true,
-          images: {
-            orderBy: {
-              position: "asc",
-            },
-          },
-        },
-      });
-    });
-
-    return product;
-  });
-
-  // EXCLUIR PRODUTO
-  app.delete<{ Params: { id: string } }>(
+  }>(
     "/api/admin/products/:id",
+    {
+      preHandler: requireAdmin,
+    },
     async (request, reply) => {
+      const { id } = request.params;
+
+      // Verificar se produto existe
       const existing = await prisma.product.findUnique({
         where: {
-          id: request.params.id,
+          id,
         },
       });
 
@@ -351,14 +242,205 @@ export async function productRoutes(app: FastifyInstance) {
         });
       }
 
+      // Validar dados
+      const result = updateProductSchema.safeParse(request.body);
+
+      if (!result.success) {
+        return reply.code(400).send({
+          message: "Dados inválidos",
+          errors: result.error.flatten().fieldErrors,
+        });
+      }
+
+      const {
+        name,
+        sku,
+        description,
+        priceCents,
+        stock,
+        categoryId,
+        active,
+        images,
+      } = result.data;
+
+      // Verificar SKU somente se foi enviado
+      if (sku !== undefined) {
+        const skuProduct = await prisma.product.findUnique({
+          where: {
+            sku,
+          },
+        });
+
+        if (skuProduct && skuProduct.id !== id) {
+          return reply.code(409).send({
+            message: "Já existe outro produto com este SKU",
+          });
+        }
+      }
+
+      // Verificar categoria somente se foi enviada
+      if (categoryId) {
+        const category = await prisma.category.findUnique({
+          where: {
+            id: categoryId,
+          },
+        });
+
+        if (!category) {
+          return reply.code(400).send({
+            message: "Categoria não encontrada",
+          });
+        }
+      }
+
+      // Montar dados da atualização
+      const data: {
+        name?: string;
+        slug?: string;
+        sku?: string;
+        description?: string | null;
+        priceCents?: number;
+        stock?: number;
+        categoryId?: string | null;
+        active?: boolean;
+      } = {};
+
+      if (name !== undefined) {
+        data.name = name;
+        data.slug = await uniqueSlug(name, id);
+      }
+
+      if (sku !== undefined) {
+        data.sku = sku;
+      }
+
+      if (description !== undefined) {
+        data.description = description || null;
+      }
+
+      if (priceCents !== undefined) {
+        data.priceCents = priceCents;
+      }
+
+      if (stock !== undefined) {
+        data.stock = stock;
+      }
+
+      if (categoryId !== undefined) {
+        data.categoryId = categoryId || null;
+      }
+
+      if (active !== undefined) {
+        data.active = active;
+      }
+
+      // Atualizar produto e imagens dentro de uma transação
+      const product = await prisma.$transaction(async (tx) => {
+        if (images !== undefined) {
+          await tx.productImage.deleteMany({
+            where: {
+              productId: id,
+            },
+          });
+        }
+
+        return tx.product.update({
+          where: {
+            id,
+          },
+          data: {
+            ...data,
+
+            ...(images !== undefined
+              ? {
+                  images: {
+                    create: images.map((image, index) => ({
+                      url: image.url,
+                      alt: image.alt || name || existing.name,
+                      position: image.position ?? index,
+                    })),
+                  },
+                }
+              : {}),
+          },
+          include: {
+            category: true,
+            images: {
+              orderBy: {
+                position: "asc",
+              },
+            },
+          },
+        });
+      });
+
+      return product;
+    },
+  );
+
+  // =========================================================
+  // EXCLUIR PRODUTO - ADMIN
+  // =========================================================
+
+  app.delete<{ Params: { id: string } }>(
+    "/api/admin/products/:id",
+    {
+      preHandler: requireAdmin,
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const existing = await prisma.product.findUnique({
+        where: {
+          id,
+        },
+        include: {
+          cartItems: true,
+          orderItems: true,
+        },
+      });
+
+      if (!existing) {
+        return reply.code(404).send({
+          message: "Produto não encontrado",
+        });
+      }
+
+      const hasCartItems = existing.cartItems.length > 0;
+      const hasOrderItems = existing.orderItems.length > 0;
+
+      // Se o produto já foi usado em carrinho ou pedido,
+      // não apagamos fisicamente para preservar o histórico.
+      if (hasCartItems || hasOrderItems) {
+        const product = await prisma.product.update({
+          where: {
+            id,
+          },
+          data: {
+            active: false,
+          },
+        });
+
+        return {
+          success: true,
+          action: "deactivated",
+          message:
+            "O produto possui histórico de uso e foi desativado em vez de excluído.",
+          product,
+        };
+      }
+
+      // Produto sem dependências: pode ser excluído definitivamente.
       await prisma.product.delete({
         where: {
-          id: request.params.id,
+          id,
         },
       });
 
       return {
         success: true,
+        action: "deleted",
+        message: "Produto excluído com sucesso.",
       };
     },
   );

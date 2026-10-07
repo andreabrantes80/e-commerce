@@ -1,6 +1,47 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getCurrentUser, logoutAdmin, type AuthUser } from "@/lib/api";
 
 export default function AdminPage() {
+    const [user, setUser] = useState<AuthUser | null>(null);
+    const [checkingAuth, setCheckingAuth] = useState(true);
+
+    useEffect(() => {
+        async function checkAuth() {
+            const currentUser = await getCurrentUser();
+
+            if (!currentUser || currentUser.role !== "ADMIN") {
+                window.location.replace("/login");
+                return;
+            }
+
+            setUser(currentUser);
+            setCheckingAuth(false);
+        }
+
+        checkAuth();
+    }, []);
+
+    async function handleLogout() {
+        try {
+            await logoutAdmin();
+        } finally {
+            window.location.replace("/login");
+        }
+    }
+
+    if (checkingAuth) {
+        return (
+            <main className="flex min-h-screen items-center justify-center bg-neutral-100">
+                <p className="text-sm text-neutral-500">
+                    Verificando sessão...
+                </p>
+            </main>
+        );
+    }
+
     return (
         <main className="min-h-screen bg-neutral-100">
             <header className="border-b border-neutral-200 bg-white">
@@ -9,17 +50,34 @@ export default function AdminPage() {
                         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500">
                             GJ TECH
                         </p>
+
                         <h1 className="text-xl font-semibold text-neutral-900">
                             MODA FEMININA
                         </h1>
                     </div>
 
-                    <Link
-                        href="/"
-                        className="text-sm font-medium text-neutral-600 hover:text-black"
-                    >
-                        Voltar para a loja
-                    </Link>
+                    <div className="flex items-center gap-5">
+                        {user && (
+                            <span className="hidden text-sm text-neutral-600 sm:block">
+                                Olá, {user.name}
+                            </span>
+                        )}
+
+                        <Link
+                            href="/"
+                            className="text-sm font-medium text-neutral-600 hover:text-black"
+                        >
+                            Voltar para a loja
+                        </Link>
+
+                        <button
+                            type="button"
+                            onClick={handleLogout}
+                            className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                        >
+                            Sair
+                        </button>
+                    </div>
                 </div>
             </header>
 
@@ -60,7 +118,10 @@ export default function AdminPage() {
                         </span>
                     </Link>
 
-                    <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+                    <Link
+                        href="/admin/categorias"
+                        className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
+                    >
                         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-xl">
                             🗂️
                         </div>
@@ -70,9 +131,13 @@ export default function AdminPage() {
                         </h3>
 
                         <p className="mt-2 text-sm text-neutral-500">
-                            Em breve você poderá gerenciar as categorias.
+                            Crie, edite e organize as categorias da loja.
                         </p>
-                    </div>
+
+                        <span className="mt-5 inline-block text-sm font-semibold text-neutral-900">
+                            Gerenciar categorias →
+                        </span>
+                    </Link>
 
                     <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
                         <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-neutral-100 text-xl">
@@ -84,7 +149,8 @@ export default function AdminPage() {
                         </h3>
 
                         <p className="mt-2 text-sm text-neutral-500">
-                            Controle de estoque será integrado ao gerenciamento de produtos.
+                            Controle de estoque será integrado ao gerenciamento
+                            de produtos.
                         </p>
                     </div>
                 </div>
